@@ -1,177 +1,161 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>タブレット対応 3D立方体</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      font-family: 'Arial', sans-serif;
-      overflow: hidden;
-    }
-    
-    .container {
-      perspective: 1200px;
-      width: 280px;
-      height: 280px;
-      cursor: grab;
-      user-select: none;
-      touch-action: none;
-    }
-    
-    .container:active { cursor: grabbing; }
-    
-    .cube {
-      width: 280px;
-      height: 280px;
-      position: relative;
-      transform-style: preserve-3d;
-      transition: transform 0.3s ease-out;
-      transform: rotateX(-15deg) rotateY(-25deg);
-    }
-    
-    .face {
-      position: absolute;
-      width: 280px;
-      height: 280px;
-      border: 4px solid rgba(255,255,255,0.9);
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      font-weight: bold;
-      color: white;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
-    }
-    
-    .front  { 
-      background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); 
-      transform: translateZ(140px); 
-    }
-    .back   { 
-      background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%); 
-      transform: rotateY(180deg) translateZ(140px); 
-    }
-    .right  { 
-      background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); 
-      transform: rotateY(90deg) translateZ(140px); 
-    }
-    .left   { 
-      background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%); 
-      transform: rotateY(-90deg) translateZ(140px); 
-    }
-    .top    { 
-      background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%); 
-      transform: rotateX(90deg) translateZ(140px); 
-    }
-    .bottom { 
-      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
-      transform: rotateX(-90deg) translateZ(140px); 
-    }
-    
-    .info {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      color: white;
-      text-align: center;
-      background: rgba(0,0,0,0.7);
-      padding: 15px 25px;
-      border-radius: 25px;
-      font-size: 16px;
-      backdrop-filter: blur(10px);
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>コラ画像作成ツール</title>
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/lib/background-removal.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        canvas { border: 1px solid #ccc; max-width: 100%; height: auto; }
+        .section { margin-bottom: 30px; }
+        input[type="file"], button { padding: 10px; margin: 5px; }
+        #preview { display: flex; flex-wrap: wrap; gap: 10px; }
+        .controls { display: flex; flex-direction: column; }
+    </style>
 </head>
 <body>
-  <div class="container" id="container">
-    <div class="cube" id="cube">
-      <div class="face front">正面</div>
-      <div class="face back">裏面</div>
-      <div class="face right">右面</div>
-      <div class="face left">左面</div>
-      <div class="face top">上面</div>
-      <div class="face bottom">下面</div>
+    <h1>コラ画像作成ツール (背景削除付き)</h1>
+    
+    <div class="section">
+        <h2>1. 背景削除</h2>
+        <input type="file" id="bgFile" accept="image/*">
+        <button onclick="removeBackground()">背景削除</button>
+        <br>
+        <canvas id="bgCanvas" width="400" height="400" style="display: none;"></canvas>
+        <img id="bgRemoved" style="max-width: 200px; display: none;">
     </div>
-  </div>
-  
-  <div class="info">
-  ドラッグ / タッチで回転
-  </div>
+    
+    <div class="section">
+        <h2>2. ベース画像アップロード</h2>
+        <input type="file" id="baseFile" accept="image/*">
+        <canvas id="baseCanvas" width="600" height="400"></canvas>
+    </div>
+    
+    <div class="section">
+        <h2>3. コラ画像要素追加</h2>
+        <div class="controls">
+            <input type="file" id="overlayFile" accept="image/*" multiple>
+            <button onclick="addOverlay()">オーバーレイ追加</button>
+            <label>テキスト: <input type="text" id="textInput" placeholder="コラテキスト"></label>
+            <button onclick="addText()">テキスト追加</button>
+        </div>
+        <div id="preview"></div>
+    </div>
+    
+    <div class="section">
+        <button onclick="generateCollage()">コラ画像生成</button>
+        <button onclick="downloadCollage()">画像ダウンロード</button>
+        <canvas id="collageCanvas" width="600" height="400"></canvas>
+    </div>
 
-  <script>
-    const container = document.getElementById('container');
-    const cube = document.getElementById('cube');
-    
-    let isDragging = false;
-    let previousX = 0;
-    let previousY = 0;
-    let rotateX = -15;
-    let rotateY = -25;
-    let sensitivity = 0.5;
-    
-    // マウスイベント
-    container.addEventListener('mousedown', startDrag);
-    container.addEventListener('mousemove', drag);
-    container.addEventListener('mouseup', endDrag);
-    container.addEventListener('mouseleave', endDrag);
-    
-    // タッチイベント（タブレット/スマホ対応）
-    container.addEventListener('touchstart', startDrag);
-    container.addEventListener('touchmove', drag);
-    container.addEventListener('touchend', endDrag);
-    
-    function startDrag(e) {
-      isDragging = true;
-      previousX = getClientX(e);
-      previousY = getClientY(e);
-    }
-    
-    function drag(e) {
-      if (!isDragging) return;
-      
-      e.preventDefault();
-      const currentX = getClientX(e);
-      const currentY = getClientY(e);
-      
-      const deltaX = currentX - previousX;
-      const deltaY = currentY - previousY;
-      
-      rotateY += deltaX * sensitivity;
-      rotateX += deltaY * sensitivity;
-      
-      cube.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-      
-      previousX = currentX;
-      previousY = currentY;
-    }
-    
-    function endDrag() {
-      isDragging = false;
-    }
-    
-    // マウスとタッチの座標統一
-    function getClientX(e) {
-      return e.touches ? e.touches[0].clientX : e.clientX;
-    }
-    
-    function getClientY(e) {
-      return e.touches ? e.touches[0].clientY : e.clientY;
-    }
-  </script>
+    <script>
+        let baseCtx, collageCtx;
+        let overlays = [];
+        let removedBg = null;
+
+        // 初期化
+        window.onload = () => {
+            baseCtx = document.getElementById('baseCanvas').getContext('2d');
+            collageCtx = document.getElementById('collageCanvas').getContext('2d');
+        };
+
+        // 背景削除
+        async function removeBackground() {
+            const fileInput = document.getElementById('bgFile');
+            const file = fileInput.files[0];
+            if (!file) return alert('画像を選択してください');
+
+            const img = new Image();
+            img.onload = async () => {
+                const canvas = document.getElementById('bgCanvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                try {
+                    const blob = await imglyBackgroundRemoval.removeBackground(canvas);
+                    const url = URL.createObjectURL(blob);
+                    document.getElementById('bgRemoved').src = url;
+                    document.getElementById('bgRemoved').style.display = 'block';
+                    removedBg = url;
+                } catch (e) {
+                    alert('背景削除エラー: ' + e.message + '\n初回はモデルダウンロードに時間がかかります。[web:2][web:6]');
+                }
+            };
+            img.src = URL.createObjectURL(file);
+        }
+
+        // ベース画像ロード
+        document.getElementById('baseFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            const img = new Image();
+            img.onload = () => {
+                baseCtx.drawImage(img, 0, 0, 600, 400);
+                collageCtx.drawImage(img, 0, 0, 600, 400);
+            };
+            img.src = URL.createObjectURL(file);
+        });
+
+        // オーバーレイ追加
+        function addOverlay() {
+            const fileInput = document.getElementById('overlayFile');
+            Array.from(fileInput.files).forEach(file => {
+                const img = new Image();
+                img.onload = () => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `
+                        <img src="${img.src}" style="max-width:100px;">
+                        <button onclick="overlayToCollage('${img.src}')">コラに追加</button>
+                    `;
+                    document.getElementById('preview').appendChild(div);
+                    overlays.push(img.src);
+                };
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        window.overlayToCollage = (src) => {
+            const img = new Image();
+            img.src = src;
+            img.onload = () => {
+                const x = Math.random() * 500;
+                const y = Math.random() * 300;
+                collageCtx.globalAlpha = 0.8;
+                collageCtx.drawImage(img, x, y, 100, 100);
+            };
+        };
+
+        // テキスト追加
+        function addText() {
+            const text = document.getElementById('textInput').value;
+            if (!text) return;
+            collageCtx.font = 'bold 40px Arial';
+            collageCtx.fillStyle = 'red';
+            collageCtx.fillText(text, 50, 100);
+        }
+
+        // コラ画像生成
+        function generateCollage() {
+            // ベースをクリアして再描画 (簡易版)
+            collageCtx.clearRect(0, 0, 600, 400);
+            baseCtx.drawImage(document.getElementById('baseCanvas'), 0, 0); // コピー簡易
+            if (removedBg) {
+                const bgImg = new Image();
+                bgImg.src = removedBg;
+                bgImg.onload = () => collageCtx.drawImage(bgImg, 0, 0, 600, 400);
+            }
+        }
+
+        // ダウンロード
+        function downloadCollage() {
+            const canvas = document.getElementById('collageCanvas');
+            const link = document.createElement('a');
+            link.download = 'kolla.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+    </script>
 </body>
 </html>
